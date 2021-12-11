@@ -1,6 +1,7 @@
 
 import java.io.File;
 import java.io.FileNotFoundException;
+import java.sql.*;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -69,9 +70,7 @@ class SortCount implements Comparator<WordsObj> {
 	public int compare(WordsObj a, WordsObj b){return b.wordCount - a.wordCount;}
 }
 
-//  <=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=->
-//<=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=->
-//  <=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=->
+
 
 public class App {
 
@@ -184,12 +183,26 @@ public class App {
 	 * 
 	 * @param String[]
 	 * @return String
+	 * @throws SQLException
+	 * @throws ClassNotFoundException
 	 */
-	static String wordCount(String[] str) {
+	static String wordCount(String[] str) throws SQLException, ClassNotFoundException {
+		
+		Class.forName("com.mysql.jdbc.Driver");
+
+		String url      = "jdbc:mysql://localhost:3306/wordOccurrences";
+		String user     = "root";
+		String password = "";
+
+		Connection connection = DriverManager.getConnection(url, user, password);
+		Statement stmt = connection.createStatement();
+
+		//clear the table at start
+      stmt.execute("truncate table sys.word;");
 
 		Boolean newWordbBoolean;
 		String word;
-		List<WordsObj> wb = new ArrayList<WordsObj>();
+		int idCount;
 
 		for (int i = 0; i < str.length; i++) {
 			// Grab Word
@@ -198,45 +211,30 @@ public class App {
 			// Scrub Word of Non-alphanumeric
 			word = word.replaceAll("[^a-zA-Z0-9]", "");
 
+			ResultSet result = stmt.executeQuery("select id, word from sys.word");
+
 			//set bool to true till proven otherwise for this word.
 			newWordbBoolean=true;
-			for (WordsObj toss: wb) {
-
-				if (toss.getWordBank().equals(word)) {
+			idCount=0;
+			for (ResultSet toss : result.getArray("word")) {
+				if (toss.toString().equals(word)) {
 					newWordbBoolean=false;
-					toss.setWordCount(toss.getWordCount()+1);
+					stmt.executeUpdate("UPDATE sys.word SET count = count + 1 WHERE id = " + idCount);
 					break;
 				}
+				idCount++;
 			}
 
 			//if word is new add it and reset the key
 			if (newWordbBoolean) {
-				WordsObj newThing = new WordsObj(word,1);
-				wb.add(newThing);
+				stmt.executeUpdate("INSERT INTO sys.word VALUES (" + (idCount+1) + ", " + word + ", 1);");
 			}
 		}
-		Collections.sort(wb, new SortCount());
-		return (wb.toString());
+		
+		ResultSet result = stmt.executeQuery("select word, count from sys.word");
+		Collections.sort(result, new SortCount());
+		return (result.toString());
 	}
-
-	@Test
-	@DisplayName("Test wordCount()")
-	public void testWordCount() {
-		String[] testString1 = {"yes", "no", "yes"};//quantity and placment1
-		String[] testString2 = {"no", "yes"};//quantity and placment2
-		String[] testString3 = {"yes", "yes", "yes"};//all the same
-		String[] testString4 = {"", "", ""};//array of empty
-		String[] testString5 = {};//empty array
-		String[] testString6 = {"no.", "'yes'"};//Character Scrub
-
-		assertEquals("[yes 2, no 1]", wordCount(testString1));
-		assertEquals("[no 1, yes 1]", wordCount(testString2));
-		assertEquals("[yes 3]", wordCount(testString3));
-		assertEquals("[ 3]", wordCount(testString4));
-		assertEquals("[]", wordCount(testString5));
-		assertEquals("[no 1, yes 1]", wordCount(testString6));
-	}
-
 
 	public static void main(String[] args) {
 		GUI();
